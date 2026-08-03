@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
@@ -19,16 +19,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String? _error;
   Timer? _timer;
   int _snapshotTick = 0;
+  Uint8List? _snapshotBytes;
+  String? _snapshotError;
+  bool _snapshotLoading = true;
 
   @override
   void initState() {
     super.initState();
     _load();
-    // Refresh counts + live feed every 5s, and bump the snapshot image
-    // every 2s - independent cadences because the image is much cheaper
-    // to re-fetch than re-aggregating the whole dashboard.
+    _fetchSnapshot();
     _timer = Timer.periodic(const Duration(seconds: 2), (t) {
-      setState(() => _snapshotTick++);
+      _snapshotTick++;
+      _fetchSnapshot();
       if (_snapshotTick % 3 == 0) _load(silent: true);
     });
   }
@@ -50,6 +52,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } catch (e) {
       await handleApiError(context, e);
       if (!silent && mounted) setState(() => _error = friendlyError(e));
+    }
+  }
+
+  Future<void> _fetchSnapshot() async {
+    try {
+      final bytes = await ApiService.instance
+          .fetchLiveSnapshotBytes()
+          .timeout(const Duration(seconds: 8));
+      if (!mounted) return;
+      if (bytes != null) {
+        setState(() {
+          _snapshotBytes = bytes;
+          _snapshotError = null;
+          _snapshotLoading = false;
+        });
+      } else {
+        setState(() {
+          _snapshotError = 'Server returned no image data';
+          _snapshotLoading = false;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _snapshotError = e.toString();
+        _snapshotLoading = false;
+      });
     }
   }
 
@@ -101,21 +130,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
         aspectRatio: 16 / 9,
         child: Container(
           color: Colors.black,
-          child: FutureBuilder<Uint8List?>(
-            key: ValueKey(_snapshotTick),
-            future: ApiService.instance.fetchLiveSnapshotBytes(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState != ConnectionState.done) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (!snapshot.hasData || snapshot.data == null) {
-                return const Center(
-                  child: Text('Live feed unavailable', style: TextStyle(color: Colors.white70)),
-                );
-              }
-              return Image.memory(snapshot.data!, fit: BoxFit.contain, gaplessPlayback: true);
-            },
-          ),
+          child: _snapshotBytes != null
+              ? Image.memory(
+                  _snapshotBytes!,
+                  fit: BoxFit.contain,
+                  gaplessPlayback: true,
+                )
+              : Center(
+                  child: _snapshotLoading
+                      ? const CircularProgressIndicator()
+                      : Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Text(
+                            'Live feed error:\n${_snapshotError ?? "unknown"}',
+                            style: const TextStyle(color: Colors.white70, fontSize: 11),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                ),
         ),
       ),
     );
@@ -146,7 +178,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     children: [
                       Icon(c.$3, color: c.$4),
                       Text(
-                        '${c.$2 ?? '-'}',
+                        '${c.$2 ?? "-"}',
                         style: Theme.of(context).textTheme.headlineSmall,
                       ),
                       Text(c.$1, style: Theme.of(context).textTheme.bodySmall),
