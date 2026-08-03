@@ -1,0 +1,35 @@
+﻿# Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+build/
+
+# Android
+.gradle/
+android/.gradle/
+android/local.properties
+
+# IDE
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# Secrets & sensitive data (any depth, catches nested folders too)
+**/.env
+**/attendance.db
+**/attendance_snapshots/
+**/captures/
+**/attendance_system.log
+
+# OS
+.DS_Store
+Thumbs.db
