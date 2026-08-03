@@ -1,21 +1,15 @@
-import 'dart:convert';
+﻿import 'dart:convert';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/models.dart';
 
-/// Thrown when a call gets a 401 back - the token is missing/expired/invalid.
-/// Screens catch this specifically to bounce the user back to the login
-/// screen instead of showing a generic error.
 class UnauthorizedException implements Exception {
   final String message;
   UnauthorizedException(this.message);
 }
 
-/// Thin wrapper around the /api/v1/* endpoints exposed by api.py.
-/// Holds the server base URL and JWT in SharedPreferences so the app stays
-/// logged in across restarts, and centralizes error handling so every
-/// screen doesn't have to repeat status-code checks.
 class ApiService {
   static const _kBaseUrlKey = 'base_url';
   static const _kTokenKey = 'jwt_token';
@@ -52,20 +46,29 @@ class ApiService {
         if (_token != null) 'Authorization': 'Bearer $_token',
       };
 
-  /// Builds a live snapshot/stream URL with the token as a query param,
-  /// since Image widgets can't attach an Authorization header themselves.
   String liveSnapshotUrl() {
     final base = _uri('/api/v1/live/snapshot', {
       'token': _token ?? '',
-      // Cache-busting timestamp so Image widgets actually re-fetch.
       't': DateTime.now().millisecondsSinceEpoch.toString(),
     });
     return base.toString();
   }
 
-  // ---------------------------------------------------------------------
-  // AUTH
-  // ---------------------------------------------------------------------
+  Future<Uint8List?> fetchLiveSnapshotBytes() async {
+    try {
+      final uri = _uri('/api/v1/live/snapshot', {
+        't': DateTime.now().millisecondsSinceEpoch.toString(),
+      });
+      final resp = await http.get(uri, headers: _authHeaders);
+      if (resp.statusCode == 200 && resp.bodyBytes.isNotEmpty) {
+        return resp.bodyBytes;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> login({
     required String serverUrl,
     required String username,
@@ -92,18 +95,12 @@ class ApiService {
     await prefs.remove(_kTokenKey);
   }
 
-  // ---------------------------------------------------------------------
-  // DASHBOARD
-  // ---------------------------------------------------------------------
   Future<DashboardSummary> getDashboard() async {
     final resp = await http.get(_uri('/api/v1/dashboard'), headers: _authHeaders);
     final body = _decodeOrThrow(resp);
     return DashboardSummary.fromJson(body);
   }
 
-  // ---------------------------------------------------------------------
-  // ATTENDANCE / MOVEMENTS
-  // ---------------------------------------------------------------------
   Future<List<AttendanceRecord>> getAttendance({String? date, String? employeeId}) async {
     final resp = await http.get(
       _uri('/api/v1/attendance', {
@@ -140,9 +137,6 @@ class ApiService {
         .toList();
   }
 
-  // ---------------------------------------------------------------------
-  // EMPLOYEES
-  // ---------------------------------------------------------------------
   Future<List<Employee>> getEmployees() async {
     final resp = await http.get(_uri('/api/v1/employees'), headers: _authHeaders);
     final body = _decodeOrThrow(resp);
@@ -179,9 +173,6 @@ class ApiService {
     _decodeOrThrow(resp);
   }
 
-  // ---------------------------------------------------------------------
-  // ENROLLMENT
-  // ---------------------------------------------------------------------
   Future<void> enrollDetails({
     required String personId,
     required String name,
@@ -219,9 +210,6 @@ class ApiService {
         'image': 'data:image/jpeg;base64,$base64Jpeg',
       }),
     );
-    // Capture responses use ok:false for expected retry reasons (blur, pose
-    // mismatch, cooldown, etc) - those aren't exceptions, the caller needs
-    // the reason text to show the user, so don't throw here.
     return jsonDecode(resp.body) as Map<String, dynamic>;
   }
 
@@ -242,9 +230,6 @@ class ApiService {
     return _decodeOrThrow(resp);
   }
 
-  // ---------------------------------------------------------------------
-  // INTERNAL
-  // ---------------------------------------------------------------------
   Map<String, dynamic> _decodeOrThrow(http.Response resp) {
     Map<String, dynamic> body;
     try {

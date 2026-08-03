@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../models/models.dart';
@@ -100,16 +101,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
         aspectRatio: 16 / 9,
         child: Container(
           color: Colors.black,
-          child: Image.network(
-            ApiService.instance.liveSnapshotUrl(),
+          child: FutureBuilder<Uint8List?>(
             key: ValueKey(_snapshotTick),
-            fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => const Center(
-              child: Text('Live feed unavailable', style: TextStyle(color: Colors.white70)),
-            ),
-            loadingBuilder: (context, child, progress) {
-              if (progress == null) return child;
-              return const Center(child: CircularProgressIndicator());
+            future: ApiService.instance.fetchLiveSnapshotBytes(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (!snapshot.hasData || snapshot.data == null) {
+                return const Center(
+                  child: Text('Live feed unavailable', style: TextStyle(color: Colors.white70)),
+                );
+              }
+              return Image.memory(snapshot.data!, fit: BoxFit.contain, gaplessPlayback: true);
             },
           ),
         ),
