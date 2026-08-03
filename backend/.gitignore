@@ -1,0 +1,7 @@
+﻿.env
+attendance.db
+attendance_snapshots/
+captures/
+attendance_system.log
+__pycache__/
+venv/

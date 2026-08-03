@@ -1,0 +1,15 @@
+# --- Core system (unchanged from the original app.py) ---
+opencv-python
+numpy
+flask
+insightface
+onnxruntime           # or onnxruntime-directml on Windows for GPU accel, see app.py comments
+python-dotenv
+waitress
+
+# --- Optional, only if anti-spoofing is enabled in app.py ---
+# uniface
+
+# --- Added for api.py (mobile REST layer) ---
+PyJWT>=2.8
+flask-cors>=4.0
